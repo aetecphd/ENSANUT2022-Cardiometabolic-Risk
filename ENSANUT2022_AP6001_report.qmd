@@ -50,8 +50,10 @@ base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
 
 input_file <- file.path(
   base_dir,
-  "ENSANUT2022_cleaned_analytical.csv"
+  "ENSANUT2022_cleaned_analytical.csv.gz"
 )
+
+ensanut <- read.csv(input_file)
 
 if (!file.exists(input_file)) {
   stop("Analytical CSV not found: ", input_file)
