@@ -1,0 +1,2 @@
+"outcome","contrast","estimate","standard_error","ci_lower","ci_upper","survey_df","sample_size"
+"hypertension","model_categoryObesity II/III | Abdominal obesity",0.253528203122949,0.0300302352382955,0.19445069665283,0.312605709593069,338,8044
