@@ -1,0 +1,584 @@
+
+---
+title: "Cardiometabolic Risk Profiles and Obesity in Mexican Adults: An Exploratory Analysis of ENSANUT 2022"
+author: "Amado Espinosa"
+date: today
+lang: en-US
+abstract: |
+  Overweight and obesity represent major public-health challenges in Mexico. Excess adiposity is associated with cardiovascular risk factors and chronic diseases, including hypertension, diabetes, and dyslipidemia. This study examines the association between joint anthropometric risk profiles and hypertension among Mexican adults using data from ENSANUT 2022. A survey-weighted cross-sectional analysis was conducted among 8,044 adults, adjusting for age, age squared, sex, and the adjustment category estrato. The primary model estimated a coefficient of 25.35 percentage points for adults with Obesity II/III and abdominal obesity, relative to adults with normal BMI and no abdominal obesity (95% CI: 19.45–31.26).
+
+  This estimate represents a coefficient from a survey-weighted linear probability model, rather than a standardized population-average difference or a causal effect. Although the broader research motivation concerns cardiometabolic risk, the empirical outcome evaluated in this analysis was hypertension alone.
+
+format:
+  pdf:
+    documentclass: article
+    geometry: margin=2.5cm
+    fontsize: 11pt
+    number-sections: true
+  docx:
+    toc: true
+    number-sections: true
+
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+
+if (!requireNamespace("survey", quietly = TRUE)) {
+  stop("Install the survey package: install.packages('survey')")
+}
+
+if (!requireNamespace("knitr", quietly = TRUE)) {
+  stop("Install knitr: install.packages('knitr')")
+}
+
+library(survey)
+library(knitr)
+
+# --------------------------------------------------
+# 1. DATA
+# --------------------------------------------------
+
+
+# Project root: directory containing this Quarto document
+base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
+
+input_file <- file.path(
+  base_dir,
+  "ENSANUT2022_cleaned_analytical.csv"
+)
+
+if (!file.exists(input_file)) {
+  stop("Analytical CSV not found: ", input_file)
+}
+
+ensanut <- read.csv(
+  input_file,
+  stringsAsFactors = FALSE,
+  na.strings = c("", "NA", "NaN")
+)
+
+required_vars <- c(
+  "hypertension",
+  "model_category",
+  "edad",
+  "sexo",
+  "estrato",
+  "upm",
+  "est_sel",
+  "ponde_f_anthro",
+  "ponde_f_adult"
+)
+
+missing_vars <- setdiff(required_vars, names(ensanut))
+
+if (length(missing_vars) > 0) {
+  stop(
+    "Missing variables: ",
+    paste(missing_vars, collapse = ", ")
+  )
+}
+
+
+# --------------------------------------------------
+# 2. ANALYTICAL SAMPLE
+# --------------------------------------------------
+
+# Both candidate weights are required so that the
+# primary and sensitivity models use the same adults.
+
+complete_case <- complete.cases(
+  ensanut[, required_vars]
+)
+
+model_data <- ensanut[
+  complete_case,
+  required_vars
+]
+
+cat("Original dataset:", nrow(ensanut), "\n")
+cat("Complete-case analytical sample:", nrow(model_data), "\n")
+cat(
+  "Excluded observations:",
+  nrow(ensanut) - nrow(model_data),
+  "\n"
+)
+
+
+model_data$model_category <- factor(
+  model_data$model_category
+)
+
+reference_category <- "Normal | No abdominal obesity"
+
+if (!reference_category %in% levels(model_data$model_category)) {
+  stop("Reference category not found.")
+}
+
+model_data$model_category <- relevel(
+  model_data$model_category,
+  ref = reference_category
+)
+
+model_data$sexo <- factor(model_data$sexo)
+model_data$estrato <- factor(model_data$estrato)
+
+# Ensure hypertension is numeric 0/1
+model_data$hypertension <- as.numeric(
+  as.character(model_data$hypertension)
+)
+
+if (!all(
+  na.omit(unique(model_data$hypertension)) %in% c(0, 1)
+)) {
+  stop("hypertension must be coded 0/1.")
+}
+
+if (nrow(model_data) != 8044) {
+  warning(
+    "Expected 8,044 observations; found ",
+    nrow(model_data),
+    ". Check the analytical sample."
+  )
+}
+
+# --------------------------------------------------
+# 3. SURVEY DESIGN
+# --------------------------------------------------
+
+options(survey.lonely.psu = "adjust")
+
+design_anthro <- svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f_anthro,
+  data = model_data,
+  nest = TRUE
+)
+
+# --------------------------------------------------
+# 4. PRIMARY MODEL
+# --------------------------------------------------
+
+fit_primary <- svyglm(
+  hypertension ~ model_category +
+    edad + I(edad^2) + sexo + estrato,
+  design = design_anthro,
+  family = gaussian()
+)
+
+# --------------------------------------------------
+# 5. ALTERNATIVE WEIGHT MODEL
+# --------------------------------------------------
+
+design_adult <- svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f_adult,
+  data = model_data,
+  nest = TRUE
+)
+
+fit_adult_weight <- svyglm(
+  hypertension ~ model_category +
+    edad + I(edad^2) + sexo + estrato,
+  design = design_adult,
+  family = gaussian()
+)
+
+# --------------------------------------------------
+# 6. EXTRACT PRINCIPAL CONTRAST
+# --------------------------------------------------
+
+contrast_name <- paste0(
+  "model_category",
+  "Obesity II/III | Abdominal obesity"
+)
+
+primary_coef <- coef(summary(fit_primary))[
+  contrast_name, ]
+
+primary_ci <- confint(fit_primary)[
+  contrast_name, ]
+
+adult_coef <- coef(summary(fit_adult_weight))[
+  contrast_name, ]
+
+adult_ci <- confint(fit_adult_weight)[
+  contrast_name, ]
+
+primary_est <- primary_coef["Estimate"]
+primary_se <- primary_coef["Std. Error"]
+
+primary_low <- primary_ci[1]
+primary_high <- primary_ci[2]
+
+adult_est <- adult_coef["Estimate"]
+adult_se <- adult_coef["Std. Error"]
+
+adult_low <- adult_ci[1]
+adult_high <- adult_ci[2]
+
+survey_df <- degf(design_anthro)
+
+# --------------------------------------------------
+# ACHIEVED SAMPLE AND SURVEY DESIGN COUNTS
+# --------------------------------------------------
+
+n_adults <- nrow(model_data)
+
+n_psus <- length(unique(
+  interaction(
+    model_data$est_sel,
+    model_data$upm,
+    drop = TRUE
+  )
+))
+
+n_strata <- length(unique(model_data$est_sel))
+
+cat("Achieved analytical sample:", n_adults, "\n")
+cat("Distinct PSUs within strata:", n_psus, "\n")
+cat("Sampling strata:", n_strata, "\n")
+cat("Survey design degrees of freedom:", survey_df, "\n")
+
+####check
+#The achieved analytical sample contained
+#`r format(n_adults, big.mark=",")` adults,
+#distributed across `r n_psus` PSUs and
+#`r n_strata` sampling strata.
+#The survey design had `r survey_df` degrees of freedom.
+
+# --------------------------------------------------
+# 7. CHECK VERIFIED RESULTS
+# --------------------------------------------------
+
+cat("Analytical sample:", nrow(model_data), "\n")
+
+cat(
+  "Primary estimate:",
+  round(100 * primary_est, 2),
+  "percentage points\n"
+)
+
+cat(
+  "Primary 95% CI:",
+  round(100 * primary_low, 2),
+  "to",
+  round(100 * primary_high, 2),
+  "\n"
+)
+
+cat(
+  "Alternative weight estimate:",
+  round(100 * adult_est, 2),
+  "percentage points\n"
+)
+```
+
+# Introduction
+
+Hypertension is an important public-health concern, and excess adiposity is a relevant factor in its distribution. Body mass index (BMI) and abdominal obesity capture related but distinct aspects of adiposity.
+
+International estimates underscore the magnitude of the challenge. According to the World Health Organization (WHO), the age-standardized prevalence of obesity among Mexican adults aged 18 years and older was 36.1% in 2022. The Organisation for Economic Co-operation and Development (OECD), using measured anthropometric data, reported that 70% or more of Mexico's population aged 15 years and older was overweight or obese in 2023 or the latest available year. These indicators describe different dimensions of excess body weight and should not be interpreted as directly comparable estimates. They nevertheless illustrate the substantial public-health burden associated with excess adiposity in Mexico.
+
+This study examines the association between severe obesity (Obesity II/III) combined with abdominal obesity and hypertension among Mexican adults using ENSANUT 2022 data.
+
+The principal comparison is between adults classified as Obesity II/III with abdominal obesity and adults with normal BMI without abdominal obesity.
+
+The analysis is observational and cross-sectional. Its purpose is to estimate an adjusted prevalence difference, not to identify a causal effect.
+
+# Data and design
+
+## Data source and analytical sample
+
+The analysis uses an analytical dataset derived from ENSANUT 2022.
+
+The final analytical sample contains `r format(nrow(model_data), big.mark=",")` adults with complete information for the outcome, exposure, adjustment variables, survey-design variables, and both candidate survey weights.
+
+The primary analysis uses the anthropometry-related survey weight (`ponde_f_anthro`). A sensitivity analysis uses the adult survey weight (`ponde_f_adult`).
+
+Both models use the same observations and covariates.
+
+## Survey design
+
+The primary analysis uses the following survey-design variables:
+
+- Primary sampling unit (PSU): `upm`
+- Sampling stratum: `est_sel`
+- Primary analysis weight: `ponde_f_anthro`
+
+The primary model uses Taylor linearization for design-based variance estimation through the R `survey` package. The lonely-PSU adjustment is set to `"adjust"`.
+
+The model also includes `estrato` as an adjustment covariate. This variable is distinct from `est_sel`, which identifies the sampling strata used in the survey design.
+
+The achieved analytical sample comprised 8,044 adults, 432 distinct primary sampling units (PSUs) nested within 94 sampling strata.
+
+This variance-estimation procedure is different from the course's alternative WLS specification with standard errors clustered by PSU. The latter accounts for clustering at the PSU level but does not explicitly incorporate the sampling strata in the same way. The two procedures should not be described as equivalent.
+
+The achieved analytical sample contained `r format(n_adults, big.mark=",")` adults, distributed across `r n_psus` PSUs and `r n_strata` sampling strata. The survey design had `r survey_df` degrees of freedom.
+
+## Outcome: hypertension
+
+The analytical outcome is a binary indicator (`hypertension`).
+
+The implemented definition combines reported prior diagnosis with measured blood pressure:
+
+- A prior affirmative diagnosis is classified as hypertension.
+- Among respondents without a prior diagnosis, hypertension is identified when mean systolic blood pressure is at least 140 mmHg or mean diastolic blood pressure is at least 90 mmHg.
+- Respondents with valid mean readings below both thresholds are classified as not hypertensive.
+
+Pregnancy-related diagnosis responses were kept separate from ordinary prior-diagnosis responses in the data-processing workflow.
+
+**Protocol deviation:** the implemented outcome counts a prior affirmative diagnosis regardless of medication status. The initial plan described diagnosis in relation to treatment. This difference is disclosed as a deviation; no separate sensitivity analysis for this difference is reported.
+
+## Exposure: BMI and abdominal obesity
+
+BMI was calculated as weight in kilograms divided by squared height in metres.
+
+The workflow used age-specific anthropometric variables for adults aged 20–59 and adults aged 60 or older.
+
+BMI categories were defined as:
+
+| Category | BMI |
+|---|---:|
+| Underweight | <18.5 |
+| Normal | 18.5–<25 |
+| Overweight | 25–<30 |
+| Obesity I | 30–<35 |
+| Obesity II/III | ≥35 |
+
+Abdominal obesity was defined using sex-specific waist-circumference thresholds:
+
+- Men: ≥90 cm
+- Women: ≥80 cm
+
+The primary exposure variable (model_category) represents joint BMI and abdominal-obesity profiles. The principal comparison contrasts Obesity II/III with abdominal obesity against normal BMI without abdominal obesity. Other categories are retained as separate model categories where represented in the analytical data.
+
+The reference category is normal BMI without abdominal obesity.
+
+# Estimand and specification
+
+## Primary outcome
+
+The outcome analyzed in this report is hypertension alone, coded as a binary indicator (`hypertension`).
+
+The composite outcome of hypertension, diabetes, or dyslipidemia was part of the original research motivation but was not analyzed. It is not the outcome used to estimate the reported coefficient or apply the decision rule.
+
+## Estimand
+
+The analysis estimates a survey-weighted best linear projection (BLP) coefficient. It does not assume that the conditional expectation of hypertension is exactly linear in the explanatory variables.
+
+Let Y denote the binary hypertension outcome. The explanatory variables include indicators for the joint BMI and abdominal-obesity categories, age, age squared, sex, and the categorical adjustment variable estrato.
+
+The reference category is normal BMI without abdominal obesity.
+
+The coefficient of interest is the coefficient on the category:
+
+**Obesity II/III with abdominal obesity.**
+
+It represents the coefficient on this category indicator in the survey-weighted linear projection, conditional on the other included regressors.
+
+The fitted specification can be summarized as:
+
+```text
+Hypertension = intercept
+             + joint BMI/abdominal-obesity category indicators
+             + age + age squared
+             + sex + estrato
+             + projection residual
+```
+
+The coefficient is expressed in probability units. Multiplication by 100 expresses it in percentage points.
+
+This coefficient is not a risk ratio, odds ratio, causal effect, or standardized population-average prevalence difference. It is a coefficient from the specified weighted linear projection.
+
+## Decision rule
+
+The substantive threshold established for the project is 15 percentage points.
+
+The decision rule compares the complete 95% confidence interval for the coefficient of interest with this threshold:
+
+- If the lower confidence limit is greater than 15 percentage points, the result meets the criterion for a substantively large positive contrast.
+- If the upper confidence limit is below 15 percentage points, the result does not meet the criterion.
+- If the interval includes 15 percentage points, the result is inconclusive relative to the threshold.
+
+This decision rule is distinct from testing whether the coefficient equals zero.
+
+The primary estimate is 25.35 percentage points, with a 95% confidence interval of 19.45 to 31.26 percentage points. The entire interval is above the 15-percentage-point threshold; therefore, the primary result meets the project's substantive decision criterion.
+
+# Description
+
+The analytical sample includes `r format(nrow(model_data), big.mark=",")` adults.
+
+```{r}
+
+
+#| label: achieved-cell-counts
+#| tbl-cap: "Achieved adult and PSU counts by sex, locality, and anthropometric profile"
+
+# Identify each PSU within its sampling stratum
+model_data$psu_id <- interaction(
+  model_data$est_sel,
+  model_data$upm,
+  drop = TRUE
+)
+
+# Count adults in each analytical cell
+adult_counts <- aggregate(
+  rep(1L, nrow(model_data)),
+  by = list(
+    sexo = model_data$sexo,
+    estrato = model_data$estrato,
+    model_category = model_data$model_category
+  ),
+  FUN = sum
+)
+
+names(adult_counts)[4] <- "Adults"
+
+# Count distinct PSUs within each analytical cell
+cell_counts <- aggregate(
+  psu_id ~ sexo + estrato + model_category,
+  data = model_data,
+  FUN = function(x) length(unique(x))
+)
+
+names(cell_counts)[4] <- "PSUs"
+
+# Combine adult and PSU counts
+cell_counts <- merge(
+  adult_counts,
+  cell_counts,
+  by = c("sexo", "estrato", "model_category")
+)
+
+knitr::kable(
+  cell_counts,
+  digits = 0,
+  align = c("l", "l", "l", "r", "r")
+)
+
+```
+
+The two groups defining the principal contrast contain:
+
+- 1,122 adults in the Obesity II/III with abdominal obesity category.
+- 977 adults in the normal BMI without abdominal obesity reference category.
+
+These are unweighted sample counts.
+
+# Results
+
+## Primary estimate
+
+The survey-weighted linear probability model estimates an adjusted prevalence difference of:
+
+**`r sprintf("%.2f", 100 * primary_est)` percentage points.**
+
+The 95% confidence interval is:
+
+**`r sprintf("[%.2f, %.2f]", 100 * primary_low, 100 * primary_high)` percentage points.**
+
+The design-based standard error is `r sprintf("%.2f", 100 * primary_se)` percentage points.
+
+The model uses `r format(nrow(model_data), big.mark=",")` observations and `r survey_df` design degrees of freedom.
+
+The verified project result is 25.35 percentage points (95% CI: 19.45–31.26).
+
+The lower confidence limit is above the project's 15-percentage-point substantive decision threshold.
+
+This comparison with the threshold is distinct from a conventional test of whether the coefficient equals zero.
+
+## Sensitivity to survey-weight choice
+
+```{r}
+#| label: weight-sensitivity
+#| tbl-cap: "Adjusted prevalence difference under alternative survey weights"
+
+sensitivity_table <- data.frame(
+  Specification = c(
+    "Primary: anthropometry weight",
+    "Sensitivity: adult weight"
+  ),
+  Estimate_pp = 100 * c(primary_est, adult_est),
+  SE_pp = 100 * c(primary_se, adult_se),
+  CI_lower_pp = 100 * c(primary_low, adult_low),
+  CI_upper_pp = 100 * c(primary_high, adult_high)
+)
+
+knitr::kable(
+  sensitivity_table,
+  digits = 2,
+  align = c("l", "r", "r", "r", "r")
+)
+```
+
+The previously verified alternative-weight estimate is 25.59 percentage points (95% CI: 20.07–31.11), compared with 25.35 percentage points (95% CI: 19.45–31.26) under the primary anthropometry weight.
+
+The point estimates differ by approximately 0.24 percentage points.
+
+The substantive conclusion is similar under the two candidate weights.
+
+# Interpretation and limitations
+
+The analysis estimates a positive adjusted association between the Obesity II/III with abdominal obesity profile and hypertension, relative to the normal BMI without abdominal obesity reference category. The estimated coefficient is 25.35 percentage points in the specified survey-weighted linear probability model.
+
+The estimate exceeds the project's 15-percentage-point substantive threshold, and the result is similar when the alternative adult survey weight is used.
+
+Several limitations qualify this finding.
+
+First, the cross-sectional design does not establish temporal ordering or causality.
+
+Second, the estimate is conditional on the covariates included in the model and may be affected by residual confounding or measurement error.
+
+Third, the primary estimate is a coefficient from a survey-weighted linear probability model. It should not be described as a causal effect or as a standardized marginal prevalence difference.
+
+Fourth, the analysis is restricted to the available complete-case analytical sample and operational definitions.
+
+The composite cardiometabolic outcome considered during the project's initial motivation was not analyzed. Its complete-case sample size could not be established from the available analytical information, so no estimate or inference is reported for that outcome.
+
+Health-service affiliation was also not included because a suitable variable was not available in the analytical dataset.
+
+
+
+# Technical references {.unnumbered}
+
+- Romero-Martínez M, Barrientos-Gutiérrez T, Cuevas-Nasu L, et al. Metodología de la Encuesta Nacional de Salud y Nutrición 2022 y Planeación y diseño de la Ensanut Continua 2020–2024. *Salud Pública de México*. 2022;64(5):522–529. doi:10.21149/14186.
+
+- World Health Organization. *Waist circumference and waist-hip ratio: report of a WHO expert consultation*. Geneva: WHO; 2011.
+
+- Lumley T. *Complex Surveys: A Guide to Analysis Using R*. Hoboken, NJ: Wiley; 2010.
+
+- World Health Organization (WHO). *Global Health Observatory: Mexico — Adult obesity, age-standardized prevalence among adults aged 18 years and older, 2022*. WHO Global Health Observatory. https://data.who.int/countries/484 (accessed November 21, 2026).
+
+- Organisation for Economic Co-operation and Development (OECD). *Health at a Glance 2025: OECD Indicators*. Section: Overweight and obesity. Paris: OECD Publishing; 2025. https://www.oecd.org/en/publications/health-at-a-glance-2025_8f9e3f98-en/full-report/overweight-and-obesity_0bf9c422.html.
+
+# Methodological appendix {.unnumbered}
+
+## A. Deviations from the initial analytical plan
+
+The implemented hypertension outcome classifies a prior affirmative diagnosis as hypertension regardless of medication status. The initial plan described diagnosis in relation to treatment. This difference is disclosed as a protocol deviation. No separate sensitivity analysis was conducted for this difference.
+
+The composite cardiometabolic outcome was part of the initial research motivation but was not evaluated in the reported analysis. Its complete-case sample size could not be established from the available analytical information. No estimate or inference is reported for this outcome.
+
+The primary model uses `edad` as the age-adjustment variable and `sexo` as the sex variable.
+
+## B. Survey-weight sensitivity analysis
+
+The alternative adult-weight model estimates a 25.59-percentage-point adjusted coefficient (95% CI: 20.07–31.11), compared with 25.35 percentage points (95% CI: 19.45–31.26) under the primary anthropometry weight.
+
+The two specifications use the same analytical observations, outcome, exposure, covariates, and survey-design structure. The alternative weight is therefore a sensitivity analysis of the weight choice, not an independent replication.
+
+## C. Analytical implementation and reproducibility
+
+The final report adopts the R implementation as the documented primary analytical workflow.
+
+An earlier Python implementation produced a different estimate (19.03 percentage points). The discrepancy has not been fully reconciled. It is therefore treated as an unresolved difference between analytical implementations, not as a verified alternative result.
+
+The R implementation and its corresponding analytical decisions are the definitive workflow for the results reported here. The discrepancy should be investigated before claiming that the two implementations reproduce the same analysis.
