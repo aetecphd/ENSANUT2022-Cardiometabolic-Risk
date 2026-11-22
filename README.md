@@ -27,7 +27,9 @@ The original source datasets include:
 
 The final R model reads the prepared analytical file:
 
-`processed_data/ENSANUT2022_cleaned_analytical.csv`
+`ENSANUT2022_cleaned_analytical.csv.gz`
+
+The compressed file is located in the repository root directory.
 
 **Data-publication policy:** Individual-level ENSANUT survey data and restricted analytical datasets are not included in this public repository. Researchers must obtain the original datasets through the appropriate official channels and comply with their applicable terms of use.
 
@@ -117,7 +119,7 @@ The principal project files are:
 | `Ensanut_AP6001.R` | Main R analysis, data-quality audits, and adult-weight sensitivity analysis |
 | `ENSANUT2022_AP6001_report.qmd` | Quarto source for the research report |
 | `ENSANUT2022_AP6001_report.pdf` | Rendered report generated from the Quarto source |
-| `processed_data/ENSANUT2022_cleaned_analytical.csv` | Prepared analytical dataset consumed by the main R script; not for public release unless redistribution is confirmed |
+| `ENSANUT2022_cleaned_analytical.csv.gz` | Compressed prepared analytical dataset consumed by the main R script; redistribution is subject to the applicable data-use permissions. |
 | `ensadul2022_entrega_w.dta` | Original adult ENSANUT public-use microdata; not included in this repository |
 | `ensaantro2022_entrega_w.dta` | Original anthropometry ENSANUT public-use microdata; not included in this repository |
 | `SALUD/NUTRICION/DICCIONARIOS/` | Supporting documentation and exploratory materials; individual files must be reviewed before publication |
@@ -151,11 +153,11 @@ From the project root in R:
 source("Ensanut_AP6001.R")
 ```
 
-The prepared analytical CSV must be available locally at:
+The prepared analytical dataset must be available locally in the repository root directory:
 
-```text
-processed_data/ENSANUT2022_cleaned_analytical.csv
-```
+ENSANUT2022_cleaned_analytical.csv.gz
+
+The R script reads the compressed CSV directly; manual decompression is not required.
 
 Researchers will need to obtain the original ENSANUT datasets through the appropriate official channels and prepare the analytical dataset before running the model.
 
