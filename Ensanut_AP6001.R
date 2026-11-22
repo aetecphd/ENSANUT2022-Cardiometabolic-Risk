@@ -13,8 +13,7 @@ base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
 # Define the input file
 input_file <- file.path(
   base_dir,
-  "processed_data",
-  "ENSANUT2022_cleaned_analytical.csv"
+  "ENSANUT2022_cleaned_analytical.csv.gz"
 )
 
 # Verify that the file exists
