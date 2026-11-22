@@ -46,7 +46,7 @@ library(knitr)
 
 
 # Project root: directory containing this Quarto document
-base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
+base_dir <- getwd()
 
 input_file <- file.path(
   base_dir,
