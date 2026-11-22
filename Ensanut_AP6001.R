@@ -8,7 +8,7 @@ library(dplyr)
 # ============================================================
 
 # Define the working directory
-base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
+base_dir <- getwd()
 
 # Define the input file
 input_file <- file.path(
