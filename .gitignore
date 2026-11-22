@@ -1,0 +1,33 @@
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# R and RStudio
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+*.Rproj
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# Temporary and backup files
+*.tmp
+*.bak
+*.log
+*~
+
+# Local analytical data and intermediate objects
+*.dta
+*.pkl
+*.rds
+
+# Original uncompressed analytical dataset
+ENSANUT2022_cleaned_analytical.csv
