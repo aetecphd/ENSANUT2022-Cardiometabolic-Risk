@@ -5,7 +5,8 @@ author: "Amado Espinosa"
 date: today
 lang: en-US
 abstract: |
-  Overweight and obesity represent major public-health challenges in Mexico. Excess adiposity is associated with cardiovascular risk factors and chronic diseases, including hypertension, diabetes, and dyslipidemia. This study examines the association between joint anthropometric risk profiles and hypertension among Mexican adults using data from ENSANUT 2022. A survey-weighted cross-sectional analysis was conducted among 8,044 adults, adjusting for age, age squared, sex, and the adjustment category estrato. The primary model estimated a coefficient of 25.35 percentage points for adults with Obesity II/III and abdominal obesity, relative to adults with normal BMI and no abdominal obesity (95% CI: 19.45–31.26).
+  Excess body weight represents an important public health challenge in Mexico. According to ENSANUT Continua 2022, the estimated prevalence of overweight among Mexican adults aged 20 years and older was 38.3%, while the prevalence of obesity was 36.9%, based on measured body mass index (BMI). The study analyzed 8,563 participants. (Campos-Nonato et al., 2023). The World Health Organization (WHO) reports an age-standardized obesity prevalence of 36.1% among Mexican adults aged 18 years and older in 2022. This WHO estimate uses a different statistical presentation and population definition from the ENSANUT estimates; the figures should therefore not be interpreted as directly interchangeable. 
+  Excess adiposity is associated with cardiovascular risk factors and chronic diseases, including hypertension, diabetes, and dyslipidemia. This study examines the association between joint anthropometric risk profiles and hypertension among Mexican adults using data from ENSANUT 2022. A survey-weighted cross-sectional analysis was conducted among 8,044 adults, adjusting for age, age squared, sex, and the adjustment category estrato. The primary model estimated a coefficient of 25.35 percentage points for adults with Obesity II/III and abdominal obesity, relative to adults with normal BMI and no abdominal obesity (95% CI: 19.45–31.26).
 
   This estimate represents a coefficient from a survey-weighted linear probability model, rather than a standardized population-average difference or a causal effect. Although the broader research motivation concerns cardiometabolic risk, the empirical outcome evaluated in this analysis was hypertension alone.
 
@@ -319,9 +320,7 @@ The primary model uses Taylor linearization for design-based variance estimation
 
 The model also includes `estrato` as an adjustment covariate. This variable is distinct from `est_sel`, which identifies the sampling strata used in the survey design.
 
-The achieved analytical sample comprised 8,044 adults, 432 distinct primary sampling units (PSUs) nested within 94 sampling strata.
-
-This variance-estimation procedure is different from the course's alternative WLS specification with standard errors clustered by PSU. The latter accounts for clustering at the PSU level but does not explicitly incorporate the sampling strata in the same way. The two procedures should not be described as equivalent.
+The achieved analytical sample comprised 8,044 adults, 432 distinct primary sampling units (PSUs) nested within 94 sampling strata. The latter accounts for clustering at the PSU level but does not explicitly incorporate the sampling strata in the same way. The two procedures should not be described as equivalent.
 
 The achieved analytical sample contained `r format(n_adults, big.mark=",")` adults, distributed across `r n_psus` PSUs and `r n_strata` sampling strata. The survey design had `r survey_df` degrees of freedom.
 
@@ -527,6 +526,24 @@ The point estimates differ by approximately 0.24 percentage points.
 
 The substantive conclusion is similar under the two candidate weights.
 
+## Exploratory analysis: Waist circumference as a continuous predictor of systolic blood pressure
+
+An additional exploratory analysis examined the relationship between waist circumference and mean systolic blood pressure. This analysis was not specified in the original pre-analysis plan and was therefore treated as post hoc.
+
+The analysis used the 8,044 observations included in the primary analytical sample. Twelve observations with missing mean systolic blood pressure were excluded, resulting in a secondary analytical sample of 8,032 adults. The primary sample and its complete-case definition were not modified for this secondary analysis.
+
+Survey-weighted regression models were used to examine the association between waist circumference and systolic blood pressure, adjusting for age, age squared, and sex. The linear specification was compared with a natural cubic spline specification with three degrees of freedom to assess whether a strictly linear relationship adequately described the data. Variance estimation used Taylor linearization under the survey design.
+
+Under the linear specification, each additional 10 cm of waist circumference was associated with an estimated 1.97 mmHg higher systolic blood pressure (95% CI: 1.53–2.40). The comparison between the linear model and the natural cubic spline specification provided evidence that the relationship was not adequately represented by a strictly linear function (working Rao–Scott test, p = 0.00092). The fitted spline suggested a positive association across much of the observed waist-circumference distribution, with flattening and greater uncertainty toward the upper tail. These patterns should be interpreted cautiously, particularly where observations are sparse and confidence intervals are wider.
+
+Result                                    Estimate
+Unadjusted association, per 10 cm         +3.17 mmHg
+Adjusted association, per 10 cm           +1.97 mmHg
+Adjusted 95% CI                           1.53–2.40 mmHg
+Linear versus spline comparison           p = 0.00092
+Complete observations                     8,032
+
+
 # Interpretation and limitations
 
 The analysis estimates a positive adjusted association between the Obesity II/III with abdominal obesity profile and hypertension, relative to the normal BMI without abdominal obesity reference category. The estimated coefficient is 25.35 percentage points in the specified survey-weighted linear probability model.
@@ -542,12 +559,19 @@ Second, the estimate is conditional on the covariates included in the model and 
 Third, the primary estimate is a coefficient from a survey-weighted linear probability model. It should not be described as a causal effect or as a standardized marginal prevalence difference.
 
 Fourth, the analysis is restricted to the available complete-case analytical sample and operational definitions.
+The waist–SBP analysis is cross-sectional and cannot establish temporal direction or causality.
 
-The composite cardiometabolic outcome considered during the project's initial motivation was not analyzed. Its complete-case sample size could not be established from the available analytical information, so no estimate or inference is reported for that outcome.
+Besides that, the spline analysis indicates nonlinearity, but the exact shape at extreme waist measurements is uncertain.
 
-Health-service affiliation was also not included because a suitable variable was not available in the analytical dataset.
+The waist–SBP analysis used 8,032 complete observations drawn from the original hypertension analytical sample of 8,044. It should not be presented as an analysis of the entire ENSANUT adult sample.
 
+Also, distinguish the observed SBP outcome from the binary hypertension definition. They are related, but not interchangeable.
 
+The analysis identifies a substantial adjusted association between combined BMI and abdominal-obesity profiles and hypertension among Mexican adults. A complementary exploratory analysis treating waist circumference as a continuous measure also identifies a positive association with systolic blood pressure, persisting after adjustment for age and sex. The relationship is statistically nonlinear, although estimates at the extremes of waist circumference are less precise.
+
+Together, these findings support the value of considering both general and abdominal adiposity when characterizing population-level cardiovascular risk. They also motivate further longitudinal research into individualized risk assessment, continuous health monitoring, and interventions supporting self-management of care. Given the cross-sectional design, the findings should be interpreted as associations rather than causal effects.
+
+An earlier Python implementation produced an adjusted estimate of 19.03 percentage points, compared with 25.35 percentage points in the final R implementation. The difference of 6.32 percentage points has not been reconciled. It should be understood as an unresolved difference between analytical implementations, not as an effect attributable to the programming language itself. Potential sources include differences in analytical samples, variable construction, model specification, reference categories, or survey-weight implementation. The results presented in the main analysis correspond to the documented R workflow. The earlier Python estimate is disclosed for transparency and is not considered an independent replication. Consequently, the discrepancy remains a limitation of the current analysis.
 
 # Technical references {.unnumbered}
 
@@ -560,6 +584,10 @@ Health-service affiliation was also not included because a suitable variable was
 - World Health Organization (WHO). *Global Health Observatory: Mexico — Adult obesity, age-standardized prevalence among adults aged 18 years and older, 2022*. WHO Global Health Observatory. https://data.who.int/countries/484 (accessed November 21, 2026).
 
 - Organisation for Economic Co-operation and Development (OECD). *Health at a Glance 2025: OECD Indicators*. Section: Overweight and obesity. Paris: OECD Publishing; 2025. https://www.oecd.org/en/publications/health-at-a-glance-2025_8f9e3f98-en/full-report/overweight-and-obesity_0bf9c422.html.
+
+- Campos-Nonato, I., Galván-Valencia, O., Hernández-Barrera, L., Oviedo-Solís, C., & Barquera, S. (2023). Prevalencia de obesidad y factores de riesgo asociados en adultos mexicanos: resultados de la Ensanut 2022. Salud Pública de México, 65(Supl. 1), S238–S247.doi.org
+
+- World Health Organization. (2022). Mexico: Age-standardized prevalence of obesity among adults (18+ years). WHO Data.data.who.int
 
 # Methodological appendix {.unnumbered}
 
@@ -584,3 +612,39 @@ The final report adopts the R implementation as the documented primary analytica
 An earlier Python implementation produced a different estimate (19.03 percentage points). The discrepancy has not been fully reconciled. It is therefore treated as an unresolved difference between analytical implementations, not as a verified alternative result.
 
 The R implementation and its corresponding analytical decisions are the definitive workflow for the results reported here. The discrepancy should be investigated before claiming that the two implementations reproduce the same analysis.
+
+
+## D. A Response to methodological review and assessment of protocol deviations
+1. Reference protocol
+
+The pre-analysis plan evaluated in this appendix is the revised version incorporating the referee's feedback. It is the version subsequently submitted for review and serves as the reference protocol for assessing the final analysis.
+
+The purpose of the referee's assessment was to distinguish between methodological choices retained, modifications introduced during implementation, and planned analyses that could not be completed. The objective was not to portray every departure as a methodological failure, but to assess its implications for analytical validity, transparency, and interpretation.
+
+2. Methodological assessment
+
+The final analysis retained the central research question, the joint classification of BMI and abdominal obesity, the principal exposure contrast, and the survey-weighted linear probability model. The principal estimate was obtained using the anthropometry survey weight, with the adult survey weight used as a sensitivity analysis.
+
+Several departures from the revised plan nevertheless require acknowledgment.
+
+First, the operational definition of hypertension changed. The revised plan specified self-reported physician diagnosis with treatment, whereas the final analysis included self-reported diagnosis regardless of treatment, in addition to measured elevated blood pressure. This change may affect outcome classification and should be considered when interpreting the estimate.
+
+Second, the planned cardiometabolic composite outcome was not evaluated. Its complete-case sample size and corresponding estimate cannot be established from the available information. Consequently, no conclusion should be drawn about this composite outcome.
+
+Third, the final adjustment set was narrower than originally proposed. The implemented model included age, age squared, sex, and estrato, while health-service affiliation was omitted. The planned interaction and subgroup analyses were also not completed. The meaning of estrato should be verified against the survey documentation before equating it with locality size.
+
+Fourth, although the plan proposed bootstrap-based variance estimation, the final report used Taylor linearization with the survey's stratification and PSU structure. This is an established design-based approach, but it is a departure from the originally specified procedure. Similarly, the planned logistic robustness analysis was not reported.
+
+3. Interpretation and limitations
+
+The principal model estimated an adjusted difference of approximately 25.35 percentage points in hypertension probability between the specified obesity profiles (95% CI: 19.45 to 31.26 percentage points). The corresponding sensitivity analysis using the adult survey weight produced a similar estimate of approximately 25.59 percentage points (95% CI: 20.07 to 31.11).
+
+These estimates describe an adjusted association under the specified survey-weighted linear model. They should not be interpreted as causal effects or as proof that the exposure produces the observed difference. The confidence interval for the hypertension estimate lies above the prespecified 15-percentage-point threshold, but the full decision rule cannot be evaluated because the planned composite outcome was not tested.
+
+The analysis is also limited by the complete-case sample of 8,044 observations, compared with the larger sample anticipated in the plan. The implications of missing observations should be considered when assessing representativeness and potential selection bias. In addition, a discrepancy between an earlier Python estimate and the final R estimate remains unresolved and should not be concealed or treated as reconciled.
+
+4. Overall assessment
+
+The final analysis provides a defensible, survey-adjusted estimate for the principal hypertension comparison. Its strongest features are the preservation of the central analytical question, the use of the complex survey design, and the sensitivity analysis with an alternative weight. Its limitations arise primarily from changes in outcome definition, a narrower adjustment strategy, and incomplete execution of planned secondary and robustness analyses.
+
+The appropriate conclusion is therefore that the analysis offers evidence of a substantial adjusted association between the joint obesity profile and hypertension in the analyzed sample, while several prespecified questions remain unanswered.
