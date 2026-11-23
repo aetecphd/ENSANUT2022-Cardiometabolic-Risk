@@ -46,22 +46,24 @@ library(knitr)
 # --------------------------------------------------
 
 
-# Project root: directory containing this Quarto document
-base_dir <- "/Users/amadoespinosa/Documents/ENSANUT2022"
+# Run Quarto from the project root, or set ENSANUT_PROJECT_DIR
+# to the directory containing the analytical CSV.
+base_dir <- Sys.getenv("ENSANUT_PROJECT_DIR", unset = getwd())
 
 input_file <- file.path(
   base_dir,
   "ENSANUT2022_cleaned_analytical.csv.gz"
 )
 
-ensanut <- read.csv(input_file)
-
 if (!file.exists(input_file)) {
-  stop("Analytical CSV not found: ", input_file)
+  stop(
+    "Analytical CSV not found: ", input_file,
+    ". Run Quarto from the project root or set ENSANUT_PROJECT_DIR."
+  )
 }
 
 ensanut <- read.csv(
-  input_file,
+  gzfile(input_file),
   stringsAsFactors = FALSE,
   na.strings = c("", "NA", "NaN")
 )
@@ -320,7 +322,7 @@ The primary model uses Taylor linearization for design-based variance estimation
 
 The model also includes `estrato` as an adjustment covariate. This variable is distinct from `est_sel`, which identifies the sampling strata used in the survey design.
 
-The achieved analytical sample comprised 8,044 adults, 432 distinct primary sampling units (PSUs) nested within 94 sampling strata. The latter accounts for clustering at the PSU level but does not explicitly incorporate the sampling strata in the same way. The two procedures should not be described as equivalent.
+The achieved analytical sample comprised 8,044 adults in 432 distinct PSUs nested within 94 sampling strata. The survey design explicitly incorporates both the PSU clustering and the sampling-stratum structure. The variable `estrato` is included separately as an adjustment covariate; it is not the sampling-stratum identifier.
 
 The achieved analytical sample contained `r format(n_adults, big.mark=",")` adults, distributed across `r n_psus` PSUs and `r n_strata` sampling strata. The survey design had `r survey_df` degrees of freedom.
 
@@ -411,7 +413,7 @@ The decision rule compares the complete 95% confidence interval for the coeffici
 
 This decision rule is distinct from testing whether the coefficient equals zero.
 
-The primary estimate is 25.35 percentage points, with a 95% confidence interval of 19.45 to 31.26 percentage points. The entire interval is above the 15-percentage-point threshold; therefore, the primary result meets the project's substantive decision criterion.
+For the hypertension outcome alone, the primary estimate is 25.35 percentage points (95% CI: 19.45–31.26), and the entire interval is above the 15-percentage-point threshold. Thus, the hypertension result meets the threshold. However, the original broader decision criterion concerned a cardiometabolic composite that was not analyzed; the full decision rule cannot be evaluated from this report.
 
 # Description
 
@@ -530,25 +532,82 @@ The substantive conclusion is similar under the two candidate weights.
 
 An additional exploratory analysis examined the relationship between waist circumference and mean systolic blood pressure. This analysis was not specified in the original pre-analysis plan and was therefore treated as post hoc.
 
-The analysis used the 8,044 observations included in the primary analytical sample. Twelve observations with missing mean systolic blood pressure were excluded, resulting in a secondary analytical sample of 8,032 adults. The primary sample and its complete-case definition were not modified for this secondary analysis.
+The secondary analysis used the 8,044 observations in the primary analytical sample, excluding 12 observations with missing mean systolic blood pressure; its analytical sample was therefore 8,032 adults. The primary sample was not changed.
 
-Survey-weighted regression models were used to examine the association between waist circumference and systolic blood pressure, adjusting for age, age squared, and sex. The linear specification was compared with a natural cubic spline specification with three degrees of freedom to assess whether a strictly linear relationship adequately described the data. Variance estimation used Taylor linearization under the survey design.
+The following code reproduces the adjusted linear model and the comparison with a natural cubic spline. It assumes that the cleaned analytical file contains the previously constructed variables `waist_cm` and `sbp_mean_12`.
 
-Under the linear specification, each additional 10 cm of waist circumference was associated with an estimated 1.97 mmHg higher systolic blood pressure (95% CI: 1.53–2.40). The comparison between the linear model and the natural cubic spline specification provided evidence that the relationship was not adequately represented by a strictly linear function (working Rao–Scott test, p = 0.00092). The fitted spline suggested a positive association across much of the observed waist-circumference distribution, with flattening and greater uncertainty toward the upper tail. These patterns should be interpreted cautiously, particularly where observations are sparse and confidence intervals are wider.
 
-Result                                    Estimate
-Unadjusted association, per 10 cm         +3.17 mmHg
-Adjusted association, per 10 cm           +1.97 mmHg
-Adjusted 95% CI                           1.53–2.40 mmHg
-Linear versus spline comparison           p = 0.00092
-Complete observations                     8,032
 
+```{r}
+#| label: waist-sbp-models
+#| include: false
+
+waist_vars <- c(required_vars, "waist_cm", "sbp_mean_12")
+missing_waist_vars <- setdiff(waist_vars, names(ensanut))
+if (length(missing_waist_vars) > 0) {
+  stop("Missing waist-SBP variables: ", paste(missing_waist_vars, collapse = ", "))
+}
+
+# Retain the primary hypertension analytical sample, then exclude only
+# observations missing waist circumference or mean systolic pressure.
+waist_data <- ensanut[complete_case, waist_vars]
+waist_data <- waist_data[complete.cases(waist_data), ]
+waist_data$sexo <- factor(waist_data$sexo)
+
+if (nrow(waist_data) != 8032) {
+  warning("Expected 8,032 waist-SBP observations; found ", nrow(waist_data))
+}
+
+waist_sbp_design <- svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f_anthro,
+  data = waist_data,
+  nest = TRUE
+)
+
+fit_waist_linear <- svyglm(
+  sbp_mean_12 ~ waist_cm + edad + I(edad^2) + sexo,
+  design = waist_sbp_design
+)
+
+fit_waist_spline <- svyglm(
+  sbp_mean_12 ~ splines::ns(waist_cm, df = 3) + edad + I(edad^2) + sexo,
+  design = waist_sbp_design
+)
+
+waist_slope <- coef(fit_waist_linear)["waist_cm"]
+waist_slope_ci <- confint(fit_waist_linear)["waist_cm", ]
+waist_spline_test <- anova(fit_waist_linear, fit_waist_spline)
+
+waist_results <- data.frame(
+  Measure = c("Adjusted association per 10 cm", "95% CI lower", "95% CI upper", "Analytical sample"),
+  Result = c(
+    10 * waist_slope,
+    10 * waist_slope_ci[1],
+    10 * waist_slope_ci[2],
+    nrow(waist_data)
+  )
+)
+```
+
+```{r}
+#| label: waist-sbp-results
+#| tbl-cap: "Adjusted waist circumference–systolic blood pressure association"
+
+knitr::kable(waist_results, digits = 2)
+
+# Design-based comparison of linear and natural-spline specifications
+waist_spline_test
+```
+
+The previously verified results were +1.97 mmHg per 10 cm (95% CI: 1.53–2.40) and a linear-versus-spline comparison p-value of 0.00092. The fitted spline suggested a positive association across much of the observed waist-circumference distribution, with flattening and greater uncertainty toward the upper tail. Interpret the shape cautiously where observations are sparse and confidence intervals are wider.
 
 # Interpretation and limitations
 
 The analysis estimates a positive adjusted association between the Obesity II/III with abdominal obesity profile and hypertension, relative to the normal BMI without abdominal obesity reference category. The estimated coefficient is 25.35 percentage points in the specified survey-weighted linear probability model.
 
-The estimate exceeds the project's 15-percentage-point substantive threshold, and the result is similar when the alternative adult survey weight is used.
+The hypertension estimate exceeds the 15-percentage-point threshold, and the result is similar when the alternative adult survey weight is used. This conclusion applies to hypertension alone. Because the planned composite cardiometabolic outcome was not analyzed, the full project decision rule cannot be declared satisfied.
 
 Several limitations qualify this finding.
 
@@ -558,20 +617,13 @@ Second, the estimate is conditional on the covariates included in the model and 
 
 Third, the primary estimate is a coefficient from a survey-weighted linear probability model. It should not be described as a causal effect or as a standardized marginal prevalence difference.
 
-Fourth, the analysis is restricted to the available complete-case analytical sample and operational definitions.
-The waist–SBP analysis is cross-sectional and cannot establish temporal direction or causality.
+Fourth, the analysis is restricted to the available complete-case analytical sample and the operational definitions described above. Missing observations may affect representativeness and could introduce selection bias.
 
-Besides that, the spline analysis indicates nonlinearity, but the exact shape at extreme waist measurements is uncertain.
+The secondary waist–SBP analysis is also cross-sectional and cannot establish temporal direction or causality. It uses 8,032 observations drawn from the primary hypertension sample of 8,044, rather than the entire ENSANUT adult sample. Mean systolic blood pressure is a continuous outcome and should not be conflated with the binary hypertension definition. The spline comparison supports a departure from strict linearity, but the precise curve—especially in the sparsely populated upper tail—is uncertain.
 
-The waist–SBP analysis used 8,032 complete observations drawn from the original hypertension analytical sample of 8,044. It should not be presented as an analysis of the entire ENSANUT adult sample.
+Taken together, the primary and exploratory analyses identify positive adjusted associations between adiposity measures and blood-pressure outcomes in this sample. They support further longitudinal research into individualized risk assessment and interventions, including self-management of care, but do not establish causal effects.
 
-Also, distinguish the observed SBP outcome from the binary hypertension definition. They are related, but not interchangeable.
-
-The analysis identifies a substantial adjusted association between combined BMI and abdominal-obesity profiles and hypertension among Mexican adults. A complementary exploratory analysis treating waist circumference as a continuous measure also identifies a positive association with systolic blood pressure, persisting after adjustment for age and sex. The relationship is statistically nonlinear, although estimates at the extremes of waist circumference are less precise.
-
-Together, these findings support the value of considering both general and abdominal adiposity when characterizing population-level cardiovascular risk. They also motivate further longitudinal research into individualized risk assessment, continuous health monitoring, and interventions supporting self-management of care. Given the cross-sectional design, the findings should be interpreted as associations rather than causal effects.
-
-An earlier Python implementation produced an adjusted estimate of 19.03 percentage points, compared with 25.35 percentage points in the final R implementation. The difference of 6.32 percentage points has not been reconciled. It should be understood as an unresolved difference between analytical implementations, not as an effect attributable to the programming language itself. Potential sources include differences in analytical samples, variable construction, model specification, reference categories, or survey-weight implementation. The results presented in the main analysis correspond to the documented R workflow. The earlier Python estimate is disclosed for transparency and is not considered an independent replication. Consequently, the discrepancy remains a limitation of the current analysis.
+An independent Python reproduction using the same 8,044 observations, outcome, exposure categories, reference group, covariates, and anthropometry weight reproduced the primary point estimate (25.35 percentage points). The R and Python implementations therefore agree on the coefficient to the reported precision. Their variance-estimation procedures were not identical: the R analysis used Taylor linearization through the `survey` package, whereas the independent Python check used PSU-clustered standard errors. Standard errors and confidence intervals can consequently differ even when the point estimate agrees. The R survey-design results are reported as the primary inference.
 
 # Technical references {.unnumbered}
 
@@ -585,9 +637,7 @@ An earlier Python implementation produced an adjusted estimate of 19.03 percenta
 
 - Organisation for Economic Co-operation and Development (OECD). *Health at a Glance 2025: OECD Indicators*. Section: Overweight and obesity. Paris: OECD Publishing; 2025. https://www.oecd.org/en/publications/health-at-a-glance-2025_8f9e3f98-en/full-report/overweight-and-obesity_0bf9c422.html.
 
-- Campos-Nonato, I., Galván-Valencia, O., Hernández-Barrera, L., Oviedo-Solís, C., & Barquera, S. (2023). Prevalencia de obesidad y factores de riesgo asociados en adultos mexicanos: resultados de la Ensanut 2022. Salud Pública de México, 65(Supl. 1), S238–S247.doi.org
-
-- World Health Organization. (2022). Mexico: Age-standardized prevalence of obesity among adults (18+ years). WHO Data.data.who.int
+- Campos-Nonato, I., Galván-Valencia, O., Hernández-Barrera, L., Oviedo-Solís, C., & Barquera, S. (2023). Prevalencia de obesidad y factores de riesgo asociados en adultos mexicanos: resultados de la Ensanut 2022. *Salud Pública de México*, 65(Supl. 1), S238–S247. https://doi.org/10.21149/14809.
 
 # Methodological appendix {.unnumbered}
 
@@ -607,19 +657,17 @@ The two specifications use the same analytical observations, outcome, exposure, 
 
 ## C. Analytical implementation and reproducibility
 
-The final report adopts the R implementation as the documented primary analytical workflow.
+The R implementation is the documented primary analytical workflow. An independent Python reproduction using the same 8,044 observations, outcome, exposure categories, reference group, covariates, and anthropometry weight reproduced the primary point estimate (25.35 percentage points).
 
-An earlier Python implementation produced a different estimate (19.03 percentage points). The discrepancy has not been fully reconciled. It is therefore treated as an unresolved difference between analytical implementations, not as a verified alternative result.
-
-The R implementation and its corresponding analytical decisions are the definitive workflow for the results reported here. The discrepancy should be investigated before claiming that the two implementations reproduce the same analysis.
+The two implementations used different variance-estimation procedures. The R analysis used Taylor linearization through the `survey` package, whereas the independent Python check used PSU-clustered standard errors. Standard errors and confidence intervals can therefore differ even when the point estimate agrees. The R survey-design results are the primary inferential results reported in this document.
 
 
-## D. A Response to methodological review and assessment of protocol deviations
+## D. Assessment of deviations from the revised pre-analysis plan
 1. Reference protocol
 
-The pre-analysis plan evaluated in this appendix is the revised version incorporating the referee's feedback. It is the version subsequently submitted for review and serves as the reference protocol for assessing the final analysis.
+The reference protocol for this assessment is the revised pre-analysis plan incorporating the instructor's feedback. It is the version used to assess which planned methods were retained, modified during implementation, or not completed.
 
-The purpose of the referee's assessment was to distinguish between methodological choices retained, modifications introduced during implementation, and planned analyses that could not be completed. The objective was not to portray every departure as a methodological failure, but to assess its implications for analytical validity, transparency, and interpretation.
+This assessment distinguishes implementation decisions from analyses that could not be completed. Its purpose is to explain the implications of those differences for analytical validity, transparency, and interpretation.
 
 2. Methodological assessment
 
@@ -629,9 +677,9 @@ Several departures from the revised plan nevertheless require acknowledgment.
 
 First, the operational definition of hypertension changed. The revised plan specified self-reported physician diagnosis with treatment, whereas the final analysis included self-reported diagnosis regardless of treatment, in addition to measured elevated blood pressure. This change may affect outcome classification and should be considered when interpreting the estimate.
 
-Second, the planned cardiometabolic composite outcome was not evaluated. Its complete-case sample size and corresponding estimate cannot be established from the available information. Consequently, no conclusion should be drawn about this composite outcome.
+Second, the planned cardiometabolic composite outcome was not evaluated. Its complete-case sample size and corresponding estimate cannot be established from the available information. No estimate is manufactured, and no conclusion is drawn about this composite outcome.
 
-Third, the final adjustment set was narrower than originally proposed. The implemented model included age, age squared, sex, and estrato, while health-service affiliation was omitted. The planned interaction and subgroup analyses were also not completed. The meaning of estrato should be verified against the survey documentation before equating it with locality size.
+Third, the final adjustment set was narrower than originally proposed. The implemented model included age, age squared, sex, and `estrato`, while health-service affiliation was omitted. The planned interaction and subgroup analyses were also not completed. The variable `estrato` is an adjustment category associated with locality size; it is distinct from `est_sel`, the sampling-stratum identifier used in the survey design.
 
 Fourth, although the plan proposed bootstrap-based variance estimation, the final report used Taylor linearization with the survey's stratification and PSU structure. This is an established design-based approach, but it is a departure from the originally specified procedure. Similarly, the planned logistic robustness analysis was not reported.
 
@@ -639,9 +687,9 @@ Fourth, although the plan proposed bootstrap-based variance estimation, the fina
 
 The principal model estimated an adjusted difference of approximately 25.35 percentage points in hypertension probability between the specified obesity profiles (95% CI: 19.45 to 31.26 percentage points). The corresponding sensitivity analysis using the adult survey weight produced a similar estimate of approximately 25.59 percentage points (95% CI: 20.07 to 31.11).
 
-These estimates describe an adjusted association under the specified survey-weighted linear model. They should not be interpreted as causal effects or as proof that the exposure produces the observed difference. The confidence interval for the hypertension estimate lies above the prespecified 15-percentage-point threshold, but the full decision rule cannot be evaluated because the planned composite outcome was not tested.
+These estimates describe an adjusted association under the specified survey-weighted linear model. They should not be interpreted as causal effects or as proof that the exposure produces the observed difference. The confidence interval for the hypertension estimate lies above the prespecified 15-percentage-point threshold. This supports the threshold criterion for hypertension alone, but the full decision rule cannot be evaluated because the planned composite outcome was not tested.
 
-The analysis is also limited by the complete-case sample of 8,044 observations, compared with the larger sample anticipated in the plan. The implications of missing observations should be considered when assessing representativeness and potential selection bias. In addition, a discrepancy between an earlier Python estimate and the final R estimate remains unresolved and should not be concealed or treated as reconciled.
+The analysis is also limited by the complete-case sample of 8,044 observations. The implications of missing observations should be considered when assessing representativeness and potential selection bias. The independent Python reproduction agrees with the R point estimate; differences in variance estimation should be kept distinct from differences in the estimated coefficient.
 
 4. Overall assessment
 
