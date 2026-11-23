@@ -617,18 +617,11 @@ Second, the estimate is conditional on the covariates included in the model and 
 
 Third, the primary estimate is a coefficient from a survey-weighted linear probability model. It should not be described as a causal effect or as a standardized marginal prevalence difference.
 
-Fourth, the analysis is restricted to the available complete-case analytical sample and operational definitions.
-The waist–SBP analysis is cross-sectional and cannot establish temporal direction or causality.
+Fourth, the analysis is restricted to the available complete-case analytical sample and the operational definitions described above. Missing observations may affect representativeness and could introduce selection bias.
 
-Besides that, the spline analysis indicates nonlinearity, but the exact shape at extreme waist measurements is uncertain.
+The secondary waist–SBP analysis is also cross-sectional and cannot establish temporal direction or causality. It uses 8,032 observations drawn from the primary hypertension sample of 8,044, rather than the entire ENSANUT adult sample. Mean systolic blood pressure is a continuous outcome and should not be conflated with the binary hypertension definition. The spline comparison supports a departure from strict linearity, but the precise curve—especially in the sparsely populated upper tail—is uncertain.
 
-The waist–SBP analysis used 8,032 complete observations drawn from the original hypertension analytical sample of 8,044. It should not be presented as an analysis of the entire ENSANUT adult sample.
-
-Also, distinguish the observed SBP outcome from the binary hypertension definition. They are related, but not interchangeable.
-
-The analysis identifies a substantial adjusted association between combined BMI and abdominal-obesity profiles and hypertension among Mexican adults. A complementary exploratory analysis treating waist circumference as a continuous measure also identifies a positive association with systolic blood pressure, persisting after adjustment for age and sex. The relationship is statistically nonlinear, although estimates at the extremes of waist circumference are less precise.
-
-Together, these findings support the value of considering both general and abdominal adiposity when characterizing population-level cardiovascular risk. They also motivate further longitudinal research into individualized risk assessment, continuous health monitoring, and interventions supporting self-management of care. Given the cross-sectional design, the findings should be interpreted as associations rather than causal effects.
+Taken together, the primary and exploratory analyses identify positive adjusted associations between adiposity measures and blood-pressure outcomes in this sample. They support further longitudinal research into individualized risk assessment and interventions, including self-management of care, but do not establish causal effects.
 
 An independent Python reproduction using the same 8,044 observations, outcome, exposure categories, reference group, covariates, and anthropometry weight reproduced the primary point estimate (25.35 percentage points). The R and Python implementations therefore agree on the coefficient to the reported precision. Their variance-estimation procedures were not identical: the R analysis used Taylor linearization through the `survey` package, whereas the independent Python check used PSU-clustered standard errors. Standard errors and confidence intervals can consequently differ even when the point estimate agrees. The R survey-design results are reported as the primary inference.
 
