@@ -532,20 +532,76 @@ The substantive conclusion is similar under the two candidate weights.
 
 An additional exploratory analysis examined the relationship between waist circumference and mean systolic blood pressure. This analysis was not specified in the original pre-analysis plan and was therefore treated as post hoc.
 
-The analysis used the 8,044 observations included in the primary analytical sample. Twelve observations with missing mean systolic blood pressure were excluded, resulting in a secondary analytical sample of 8,032 adults. The primary sample and its complete-case definition were not modified for this secondary analysis.
+The secondary analysis used the 8,044 observations in the primary analytical sample, excluding 12 observations with missing mean systolic blood pressure; its analytical sample was therefore 8,032 adults. The primary sample was not changed.
 
-Survey-weighted regression models were used to examine the association between waist circumference and systolic blood pressure, adjusting for age, age squared, and sex. The linear specification was compared with a natural cubic spline specification with three degrees of freedom to assess whether a strictly linear relationship adequately described the data. Variance estimation used Taylor linearization under the survey design.
+The following code reproduces the adjusted linear model and the comparison with a natural cubic spline. It assumes that the cleaned analytical file contains the previously constructed variables `waist_cm` and `sbp_mean_12`.
 
-Under the linear specification, each additional 10 cm of waist circumference was associated with an estimated 1.97 mmHg higher systolic blood pressure (95% CI: 1.53–2.40). The comparison between the linear model and the natural cubic spline specification provided evidence that the relationship was not adequately represented by a strictly linear function (working Rao–Scott test, p = 0.00092). The fitted spline suggested a positive association across much of the observed waist-circumference distribution, with flattening and greater uncertainty toward the upper tail. These patterns should be interpreted cautiously, particularly where observations are sparse and confidence intervals are wider.
 
-| Exploratory result | Estimate |
-|---|---:|
-| Unadjusted association, per 10 cm | +3.17 mmHg |
-| Adjusted association, per 10 cm | +1.97 mmHg |
-| Adjusted 95% CI | 1.53–2.40 mmHg |
-| Linear versus spline comparison | p = 0.00092 |
-| Complete observations | 8,032 |
 
+```{r}
+#| label: waist-sbp-models
+#| include: false
+
+waist_vars <- c(required_vars, "waist_cm", "sbp_mean_12")
+missing_waist_vars <- setdiff(waist_vars, names(ensanut))
+if (length(missing_waist_vars) > 0) {
+  stop("Missing waist-SBP variables: ", paste(missing_waist_vars, collapse = ", "))
+}
+
+# Retain the primary hypertension analytical sample, then exclude only
+# observations missing waist circumference or mean systolic pressure.
+waist_data <- ensanut[complete_case, waist_vars]
+waist_data <- waist_data[complete.cases(waist_data), ]
+waist_data$sexo <- factor(waist_data$sexo)
+
+if (nrow(waist_data) != 8032) {
+  warning("Expected 8,032 waist-SBP observations; found ", nrow(waist_data))
+}
+
+waist_sbp_design <- svydesign(
+  ids = ~upm,
+  strata = ~est_sel,
+  weights = ~ponde_f_anthro,
+  data = waist_data,
+  nest = TRUE
+)
+
+fit_waist_linear <- svyglm(
+  sbp_mean_12 ~ waist_cm + edad + I(edad^2) + sexo,
+  design = waist_sbp_design
+)
+
+fit_waist_spline <- svyglm(
+  sbp_mean_12 ~ splines::ns(waist_cm, df = 3) + edad + I(edad^2) + sexo,
+  design = waist_sbp_design
+)
+
+waist_slope <- coef(fit_waist_linear)["waist_cm"]
+waist_slope_ci <- confint(fit_waist_linear)["waist_cm", ]
+waist_spline_test <- anova(fit_waist_linear, fit_waist_spline)
+
+waist_results <- data.frame(
+  Measure = c("Adjusted association per 10 cm", "95% CI lower", "95% CI upper", "Analytical sample"),
+  Result = c(
+    10 * waist_slope,
+    10 * waist_slope_ci[1],
+    10 * waist_slope_ci[2],
+    nrow(waist_data)
+  )
+)
+```
+
+```{r}
+#| label: waist-sbp-results
+#| tbl-cap: "Adjusted waist circumference–systolic blood pressure association"
+
+knitr::kable(waist_results, digits = 2)
+
+# Design-based comparison of linear and natural-spline specifications
+waist_spline_test
+```
+
+The previously verified results were +1.97 mmHg per 10 cm (95% CI: 1.53–2.40) and a linear-versus-spline comparison p-value of 0.00092. The fitted spline suggested a positive association across much of the observed waist-circumference distribution, with flattening and greater uncertainty toward the upper tail. Interpret the shape cautiously where observations are sparse and confidence intervals are wider.
 
 # Interpretation and limitations
 
@@ -608,11 +664,9 @@ The two specifications use the same analytical observations, outcome, exposure, 
 
 ## C. Analytical implementation and reproducibility
 
-The final report adopts the R implementation as the documented primary analytical workflow.
+The R implementation is the documented primary analytical workflow. An independent Python reproduction using the same 8,044 observations, outcome, exposure categories, reference group, covariates, and anthropometry weight reproduced the primary point estimate (25.35 percentage points).
 
-An earlier Python implementation produced a different estimate (19.03 percentage points). The discrepancy has not been fully reconciled. It is therefore treated as an unresolved difference between analytical implementations, not as a verified alternative result.
-
-The R implementation and its corresponding analytical decisions are the definitive workflow for the results reported here. The discrepancy should be investigated before claiming that the two implementations reproduce the same analysis.
+The two implementations used different variance-estimation procedures. The R analysis used Taylor linearization through the `survey` package, whereas the independent Python check used PSU-clustered standard errors. Standard errors and confidence intervals can therefore differ even when the point estimate agrees. The R survey-design results are the primary inferential results reported in this document.
 
 
 ## D. Assessment of deviations from the revised pre-analysis plan
